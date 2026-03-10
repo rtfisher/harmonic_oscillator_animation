@@ -21,3 +21,4 @@ select = ["E", "F", "W", "I"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--cov=harmonic_oscillator_animation --cov-report=term-missing --cov-fail-under=80"
+qt_api = "pyqt6"

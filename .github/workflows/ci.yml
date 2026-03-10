@@ -61,6 +61,8 @@ jobs:
 
       - name: Run tests with virtual display
         shell: bash -el {0}
+        env:
+          PYTEST_QT_API: pyqt6
         run: xvfb-run --auto-servernum pytest
 
       - name: Upload coverage report
