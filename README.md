@@ -4,6 +4,8 @@
 
 This repository is a talk/demo example showing **Claude Code's multi-agent orchestration capabilities**. A single prompt launched 1 supervisory agent coordinating 7 specialist subagents that collaboratively built, tested, linted, and configured CI/CD for a complete Python desktop application — in ~18 minutes, using ~100K tokens.
 
+![Demo frame at 3.5 periods](demo_frame.png)
+
 ## What Was Built
 
 `harmonic_oscillator_animation/` is a PyQt6 desktop application that visualizes undamped simple harmonic motion:

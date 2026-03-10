@@ -22,6 +22,10 @@ jobs:
           activate-environment: harmonic_oscillator_animation
           auto-activate-base: false
 
+      - name: Install package
+        shell: bash -el {0}
+        run: pip install -e .
+
       - name: Lint with ruff
         shell: bash -el {0}
         run: ruff check src/ tests/
@@ -45,6 +49,10 @@ jobs:
           environment-file: harmonic_oscillator_animation/environment.yml
           activate-environment: harmonic_oscillator_animation
           auto-activate-base: false
+
+      - name: Install package
+        shell: bash -el {0}
+        run: pip install -e .
 
       - name: Install virtual display for PyQt6
         run: sudo apt-get install -y xvfb libgl1
