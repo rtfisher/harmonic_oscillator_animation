@@ -57,7 +57,7 @@ jobs:
         run: pip install -e .
 
       - name: Install virtual display for PyQt6
-        run: sudo apt-get install -y xvfb libgl1
+        run: sudo apt-get install -y xvfb libgl1 libegl1
 
       - name: Remove PySide6 to avoid Qt binding conflict
         shell: bash -el {0}
