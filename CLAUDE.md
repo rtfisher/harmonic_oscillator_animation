@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Purpose
 
-This is a demo/talk example showing Claude Code's multi-agent orchestration capabilities. The primary artifact is `harmonic_oscillator_animation/` — a PyQt6 desktop app that animates an undamped simple harmonic oscillator, built by a supervisory agent coordinating 7 specialist subagents.
+This is a demo/talk example showing Claude Code's multi-agent orchestration capabilities. The primary artifact is `harmonic_oscillator_animation/` — a PyQt6 desktop app that animates an undamped simple harmonic oscillator, built by 1 supervisory agent coordinating 7 specialist subagents.
 
 The prompt used to generate it is in `harmonic_oscillator_animation_prompt.txt`. The run summary (timing, token usage, test results) is in `harmonic_oscillator_animation_run_summary.md`.
 
