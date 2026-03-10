@@ -61,7 +61,7 @@ jobs:
 
       - name: Remove PySide6 to avoid Qt binding conflict
         shell: bash -el {0}
-        run: pip uninstall -y PySide6 PySide6-Addons PySide6-Essentials shiboken6 || true
+        run: conda remove --force -y pyside6 shiboken6 2>/dev/null || true
 
       - name: Run tests with virtual display
         shell: bash -el {0}
