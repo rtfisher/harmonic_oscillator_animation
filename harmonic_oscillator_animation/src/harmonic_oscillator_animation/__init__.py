@@ -1,0 +1,1 @@
+"""Harmonic Oscillator Animation package."""

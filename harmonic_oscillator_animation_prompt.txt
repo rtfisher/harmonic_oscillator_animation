@@ -1,0 +1,342 @@
+You are a supervisory orchestration agent. Your job is to coordinate up to 7
+specialist subagents to build, test, and configure CI/CD for a Simple Harmonic
+Oscillator (SHO) desktop visualization in Python. You delegate tasks, collect
+results, and integrate the outputs into a coherent, working project. You do not
+retry failed subagents — if a subagent reports failure, surface the error and
+halt.
+
+══════════════════════════════════════════════════════════════
+PROJECT OVERVIEW
+══════════════════════════════════════════════════════════════
+
+Build a desktop application that visualizes undamped simple harmonic motion.
+The window has two frames stacked vertically:
+
+  TOP FRAME    — A rendered coil-spring sprite with a hanging mass block.
+                 The mass oscillates in real time, continuously looping.
+  BOTTOM FRAME — A live-updating position-vs-time plot. The trace grows
+                 rightward as the animation runs, always showing the full
+                 history from t=0.
+
+The demo is fixed (no user controls). Parameters are hardcoded constants.
+The app uses a light theme throughout.
+
+══════════════════════════════════════════════════════════════
+ENVIRONMENT & CONSTRAINTS
+══════════════════════════════════════════════════════════════
+
+- Runtime:        conda environment (numpy and scipy pre-installed)
+- GUI framework:  PyQt6 with matplotlib embedded via FigureCanvasQTAgg
+- Linter:         ruff (lint + format)
+- Tests:          pytest with pytest-qt, pytest-cov; 80% minimum coverage
+- CI/CD:          GitHub Actions — triggers on push to main and pull requests
+- Project layout: flat src-layout shown below; no monorepo nesting
+
+Project root: harmonic_oscillator_animation/
+
+  harmonic_oscillator_animation/
+  ├── environment.yml
+  ├── pyproject.toml
+  ├── src/
+  │   └── harmonic_oscillator_animation/
+  │       ├── __init__.py
+  │       ├── main.py
+  │       ├── physics.py
+  │       ├── spring_renderer.py
+  │       ├── plot_widget.py
+  │       └── app.py
+  ├── tests/
+  │   ├── conftest.py
+  │   ├── unit/
+  │   │   └── test_physics.py
+  │   ├── integration/
+  │   │   └── test_widgets.py
+  │   └── e2e/
+  │       └── test_app.py
+  └── .github/
+      └── workflows/
+          └── ci.yml
+
+══════════════════════════════════════════════════════════════
+PHYSICS SPECIFICATION
+══════════════════════════════════════════════════════════════
+
+Undamped SHO: x(t) = A·cos(ω₀·t + φ)
+
+Hardcoded constants (define in physics.py):
+  MASS        = 1.0      # kg
+  SPRING_K    = 10.0     # N/m
+  AMPLITUDE   = 0.15     # m  (initial displacement from equilibrium)
+  PHASE       = 0.0      # rad
+  OMEGA_0     = sqrt(SPRING_K / MASS)   # ~3.162 rad/s
+  PERIOD      = 2π / OMEGA_0            # ~1.987 s
+
+The physics module must expose:
+  - position(t: float) -> float          # x(t)
+  - velocity(t: float) -> float          # v(t) = -A·ω₀·sin(ω₀·t + φ)
+  - acceleration(t: float) -> float      # a(t) = -ω₀²·x(t)
+  - time_series(t_arr: np.ndarray) -> np.ndarray  # vectorised position
+
+══════════════════════════════════════════════════════════════
+SPRING RENDERER SPECIFICATION
+══════════════════════════════════════════════════════════════
+
+Render a vertical coil spring as a matplotlib artist on a dedicated Axes.
+The spring connects a fixed ceiling anchor to the top of the mass block.
+
+Coil sprite construction:
+  - Draw N_COILS = 12 full sinusoidal coil loops using a parametric curve:
+      x_coil(θ) = COIL_RADIUS · sin(θ)
+      y_coil(θ) = linear interpolation from y_top to y_bottom over θ ∈ [0, 2π·N_COILS]
+  - Add straight vertical segments at top and bottom (attachment leads).
+  - The spring stretches/compresses as the mass moves: y_bottom tracks the
+    mass position in display coordinates.
+
+Mass block:
+  - Drawn as a filled rectangle (FancyBboxPatch or Rectangle) centered on
+    x=0, y = EQUILIBRIUM_Y + x(t) in display units.
+  - Label it "m" in the center.
+
+Ceiling:
+  - A horizontal line across the top of the axes with hatch marks above it.
+
+The spring Axes must have:
+  - No visible axis ticks or labels
+  - Fixed x-limits: [-0.3, 0.3]
+  - Fixed y-limits: [-0.35, 0.35]  (equilibrium at y=0)
+  - Light background (#FAFAFA)
+
+Expose a class SpringRenderer(ax: Axes) with:
+  - update(x: float) -> list[Artist]   # updates artists, returns them for
+                                         blit-compatible animation
+
+══════════════════════════════════════════════════════════════
+PLOT WIDGET SPECIFICATION
+══════════════════════════════════════════════════════════════
+
+A matplotlib Axes embedded in the bottom frame showing x(t) vs t.
+
+  - x-axis label: "Time (s)",  y-axis label: "Position (m)"
+  - x-axis range: always [0, current_t + 0.1·PERIOD] (scrolls with time)
+  - y-axis range: fixed [-1.2·AMPLITUDE, 1.2·AMPLITUDE]
+  - Grid: on, light gray
+  - Line color: #1f77b4 (matplotlib default blue)
+  - The trace starts empty at t=0 and grows one data point per animation frame.
+
+Expose a class PlotWidget(ax: Axes) with:
+  - append(t: float, x: float) -> None   # adds point to internal buffer
+  - refresh() -> None                    # redraws the line
+
+══════════════════════════════════════════════════════════════
+APPLICATION SHELL SPECIFICATION
+══════════════════════════════════════════════════════════════
+
+File: app.py — defines MainWindow(QMainWindow).
+
+Layout:
+  - Central widget contains a QVBoxLayout with two matplotlib canvases
+    stacked vertically (spring on top, plot on bottom), ratio 1:1.
+  - Window title: "Simple Harmonic Oscillator"
+  - Window size: 700 × 800 px, not resizable.
+  - Light palette throughout (use QPalette or stylesheet).
+
+Animation loop:
+  - Driven by a QTimer firing every FRAME_MS = 33 ms (~30 fps).
+  - Each tick: increment simulation time by FRAME_MS / 1000.0 seconds,
+    call physics.position(t), update SpringRenderer and PlotWidget,
+    call canvas.draw_idle() on each canvas.
+  - The simulation time resets to 0 after 10 × PERIOD (seamless loop).
+    When resetting, also clear the PlotWidget trace buffer.
+
+File: main.py — entry point:
+  - Creates QApplication, instantiates MainWindow, calls show() and exec().
+
+══════════════════════════════════════════════════════════════
+SUBAGENT ASSIGNMENTS
+══════════════════════════════════════════════════════════════
+
+The supervisory agent spawns the following subagents in order, waiting for
+each to complete before proceeding to the next (sequential, not parallel),
+except where noted as concurrent.
+
+SUBAGENT 1 — Environment & Scaffold Agent
+  Task: Create the full directory structure and all placeholder __init__.py
+        files. Write environment.yml and pyproject.toml.
+
+  environment.yml must contain:
+    name: harmonic_oscillator_animation
+    channels: [conda-forge, defaults]
+    dependencies:
+      - python=3.11
+      - numpy
+      - scipy
+      - pyqt6  (or pyqt >=6)
+      - matplotlib
+      - pytest
+      - pytest-qt
+      - pytest-cov
+      - ruff
+
+  pyproject.toml must contain:
+    [build-system] using setuptools
+    [project] with name="harmonic_oscillator_animation", version="0.1.0", packages in src/
+    [tool.ruff] with line-length=88, select=["E","F","W","I"]
+    [tool.ruff.format]
+    [tool.pytest.ini_options] with testpaths=["tests"],
+      addopts="--cov=harmonic_oscillator_animation --cov-report=term-missing --cov-fail-under=80"
+
+SUBAGENT 2 — Physics Engine Agent
+  Task: Implement src/harmonic_oscillator_animation/physics.py exactly per the Physics Specification
+        above. Use only numpy. No class needed — module-level functions and
+        constants only. Include a module docstring.
+
+SUBAGENT 3 — Spring Renderer Agent
+  Task: Implement src/harmonic_oscillator_animation/spring_renderer.py per the Spring Renderer
+        Specification. Use matplotlib patches and Line2D artists. The coil
+        must be drawn with at least 500 points for smooth appearance.
+        No external image assets — all geometry is computed analytically.
+
+SUBAGENT 4 — Plot Widget Agent
+  Task: Implement src/harmonic_oscillator_animation/plot_widget.py per the Plot Widget Specification.
+        Use collections.deque with no maxlen for the trace buffer (unbounded,
+        cleared on loop reset). Convert to np.array only when refreshing.
+
+SUBAGENTS 5 & 6 — Run concurrently:
+
+  SUBAGENT 5 — Application Shell Agent
+    Task: Implement src/harmonic_oscillator_animation/app.py and src/harmonic_oscillator_animation/main.py per the
+          Application Shell Specification. Import SpringRenderer and
+          PlotWidget. The QTimer must be started in __init__ after all
+          widgets are laid out.
+
+  SUBAGENT 6 — Test Suite Agent
+    Task: Write all tests under tests/. Requirements:
+
+    tests/conftest.py:
+      - Provide a pytest-qt qtbot fixture (re-export or confirm availability).
+      - Provide a @pytest.fixture named app_window that creates and returns
+        a MainWindow instance using qtbot, without showing it.
+
+    tests/unit/test_physics.py:
+      - test_position_at_zero: x(0) == AMPLITUDE
+      - test_position_at_quarter_period: |x(T/4)| < 1e-9  (should be ~0)
+      - test_position_at_half_period: x(T/2) ≈ -AMPLITUDE  (within 1e-9)
+      - test_velocity_at_zero: v(0) ≈ 0
+      - test_velocity_at_quarter_period: |v(T/4)| ≈ AMPLITUDE·OMEGA_0
+      - test_acceleration_proportional: a(t) == -OMEGA_0**2 * x(t) for
+        10 random t values
+      - test_time_series_shape: time_series returns array of correct shape
+      - test_energy_conservation: (0.5·k·x²) + (0.5·m·v²) ≈ 0.5·k·A²
+        at 20 equally spaced time points (within 1e-6 relative tolerance)
+
+    tests/integration/test_widgets.py:
+      - test_spring_renderer_update_returns_artists: instantiate SpringRenderer
+        on a bare Axes, call update(0.1), assert return value is a non-empty list
+      - test_spring_renderer_mass_position: after update(x), the mass patch
+        y-center is approximately EQUILIBRIUM_Y + x in display coords
+      - test_plot_widget_append_and_refresh: append 5 (t, x) pairs,
+        call refresh(), assert line data length == 5
+      - test_plot_widget_clear: append data, clear buffer, refresh(),
+        assert line data length == 0
+
+    tests/e2e/test_app.py:
+      - test_window_title: MainWindow title == "Simple Harmonic Oscillator"
+      - test_window_size: width==700, height==800
+      - test_timer_fires: use qtbot.waitSignal or QTimer.singleShot to
+        advance 100 ms; assert simulation time > 0
+      - test_loop_reset: manually set MainWindow._t to 10*PERIOD - 0.001,
+        advance one tick, assert _t < FRAME_MS / 1000.0 + 1e-9 (reset occurred)
+        and plot buffer is empty
+
+SUBAGENT 7 — CI/CD Agent
+  Task: Write .github/workflows/ci.yml.
+
+  The workflow must:
+    name: CI
+    on: [push to main, pull_request]
+
+    jobs:
+      lint:
+        runs-on: ubuntu-latest
+        steps:
+          - uses: actions/checkout@v4
+          - uses: conda-incubator/setup-miniconda@v3
+            with: environment-file: environment.yml, activate-environment: harmonic_oscillator_animation
+          - run: ruff check src/ tests/
+          - run: ruff format --check src/ tests/
+
+      test:
+        runs-on: ubuntu-latest
+        needs: lint
+        steps:
+          - uses: actions/checkout@v4
+          - uses: conda-incubator/setup-miniconda@v3
+            with: environment-file: environment.yml, activate-environment: harmonic_oscillator_animation
+          - name: Install virtual display for PyQt6
+            run: sudo apt-get install -y xvfb
+          - name: Run tests with virtual display
+            run: xvfb-run --auto-servernum pytest
+          - name: Upload coverage report
+            uses: actions/upload-artifact@v4
+            if: always()
+            with:
+              name: coverage-report
+              path: .coverage
+
+  The test job runs only after lint passes (needs: lint).
+  Coverage artifact is uploaded even if tests fail (if: always()).
+
+══════════════════════════════════════════════════════════════
+TOKEN USAGE & TIMING INSTRUMENTATION
+══════════════════════════════════════════════════════════════
+
+The supervisory agent must track and report resource consumption across the
+entire run. Implement the following instrumentation:
+
+Wall clock time:
+  - Record a session start timestamp (ISO 8601) immediately when the
+    supervisory agent begins.
+  - Record a per-subagent start and end timestamp for each of the 7 subagents.
+  - Record a session end timestamp after the integration checklist completes.
+  - Compute and report elapsed time for each subagent and total session
+    wall clock time in seconds (rounded to 2 decimal places).
+
+Token usage:
+  - After each subagent completes, record the tokens consumed by that
+    subagent turn: input tokens, output tokens, and total tokens.
+  - Accumulate a running session total across all subagent turns.
+  - If the Claude API usage metadata is available in the response object,
+    read it directly; otherwise estimate from character count using the
+    approximation 1 token ≈ 4 characters.
+
+Summary table:
+  At the end of the final report (step 5 of the integration checklist),
+  print a Markdown table with columns:
+    | Subagent | Task | Wall Time (s) | Input Tokens | Output Tokens | Total Tokens |
+  followed by a TOTALS row summing all numeric columns.
+  Then print:
+    Session start : <ISO timestamp>
+    Session end   : <ISO timestamp>
+    Total elapsed : <N> seconds
+
+══════════════════════════════════════════════════════════════
+SUPERVISORY AGENT INTEGRATION CHECKLIST
+══════════════════════════════════════════════════════════════
+
+After all subagents complete, the supervisory agent must:
+
+1. Verify every file in the directory tree exists and is non-empty.
+2. Run: ruff check src/ tests/ && ruff format --check src/ tests/
+   Fix any violations before proceeding.
+3. Run: python -m pytest --tb=short
+   All tests must pass; coverage must be ≥ 80%.
+4. Run: python -c "from harmonic_oscillator_animation.app import MainWindow; print('Import OK')"
+   to verify the package is importable.
+5. Report a final summary: files created, test results, coverage percentage,
+   lint status, and any deviations from the specification made during
+   implementation (with justification). Include the token usage and wall
+   clock timing table as specified in the TOKEN USAGE & TIMING
+   INSTRUMENTATION section above.
+
+Do not consider the task complete until step 5 is reached without errors.
+══════════════════════════════════════════════════════════════

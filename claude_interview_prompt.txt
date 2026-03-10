@@ -1,0 +1,1 @@
+Interview me to produce a highly detailed prompt for Claude Code for a simple harmonic oscillator visualization, showing the oscillator on a spring on the top frame, and a plot of position versus time beneath. Include a supervisory agent and up to 7 subagents appropriately tasked for this project, as well as a CI/CD test suite with Github workflow integration.

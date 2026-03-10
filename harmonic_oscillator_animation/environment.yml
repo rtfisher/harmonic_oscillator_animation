@@ -1,0 +1,17 @@
+name: harmonic_oscillator_animation
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - numpy
+  - scipy
+  - matplotlib
+  - pytest
+  - pytest-cov
+  - ruff
+  - pip
+  - pip:
+    - setuptools
+    - PyQt6
+    - pytest-qt
