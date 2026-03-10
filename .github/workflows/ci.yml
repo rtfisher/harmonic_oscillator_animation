@@ -59,10 +59,15 @@ jobs:
       - name: Install virtual display for PyQt6
         run: sudo apt-get install -y xvfb libgl1
 
+      - name: Remove PySide6 to avoid Qt binding conflict
+        shell: bash -el {0}
+        run: pip uninstall -y PySide6 PySide6-Addons PySide6-Essentials shiboken6 || true
+
       - name: Run tests with virtual display
         shell: bash -el {0}
         env:
           PYTEST_QT_API: pyqt6
+          QT_API: pyqt6
         run: xvfb-run --auto-servernum pytest
 
       - name: Upload coverage report
