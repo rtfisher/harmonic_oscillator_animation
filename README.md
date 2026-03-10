@@ -1,6 +1,6 @@
 # Claude Code Multi-Agent Demo: Harmonic Oscillator Animation
 
-[![CI](https://github.com/rtfisher/harmonic_oscillator_animation/actions/workflows/ci.yml/badge.svg)](https://github.com/rtfisher/harmonic_oscillator_animation/actions/workflows/ci.yml)
+[![CI/CD](https://github.com/rtfisher/harmonic_oscillator_animation/actions/workflows/ci.yml/badge.svg)](https://github.com/rtfisher/harmonic_oscillator_animation/actions/workflows/ci.yml)
 
 This repository is a talk/demo example showing **Claude Code's multi-agent orchestration capabilities**. A single prompt launched 1 supervisory agent coordinating 7 specialist subagents that collaboratively built, tested, linted, and configured CI/CD for a complete Python desktop application — in ~18 minutes, using ~100K tokens.
 
